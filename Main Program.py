@@ -94,7 +94,7 @@ def roll_comparison(player_dict):
         roll = data["roll"]
 
         for key, value in special_roll.items():
-            if (roll[0] in key) and (roll[1] in key) and (roll[2] in key):
+            if sorted(roll) == sorted(key):
                 data["score"] = value
                 break
 
