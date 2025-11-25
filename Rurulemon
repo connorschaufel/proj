@@ -1,0 +1,841 @@
+import turtle
+import random
+
+# ----------------- GLOBALS -----------------
+
+screen = turtle.Screen()
+screen.title("Zanzibar")
+screen.setup(width=900, height=700)
+screen.bgcolor("lightblue")
+
+buttons = []
+
+# game state
+players = []            # list of player names
+player_data = {}        # name -> {"roll": str, "score": int, "chips": int}
+current_player_index = 0
+round_num = 1
+roll_number = 0         # 0 before first roll, then 1–3
+current_dice = None     # tuple (d1, d2, d3) or None
+game_phase = "menu"     # "menu", "setup", "turn", "between_rounds", "game_over"
+
+
+# ----------------- BASIC DRAW UTILS -----------------
+
+def make_pen():
+    """Create a fast, hidden turtle for drawing."""
+    t = turtle.Turtle()
+    t.hideturtle()
+    t.penup()
+    t.speed(0)
+    return t
+
+
+def on_click(x, y):
+    """Check if a mouse click was inside any button."""
+    for b in buttons:
+        left = b["x"] - b["w"] / 2
+        right = b["x"] + b["w"] / 2
+        bottom = b["y"] - b["h"] / 2
+        top = b["y"] + b["h"] / 2
+
+        if left <= x <= right and bottom <= y <= top:
+            b["callback"]()
+            break
+
+
+def reset_screen():
+    """Clear screen, reset basic settings, and re-attach click handler."""
+    global buttons
+    screen.clear()
+    screen.title("Zanzibar")
+    screen.setup(width=900, height=700)
+    screen.bgcolor('#4f81c7')
+    buttons = []
+    screen.onclick(on_click)
+
+
+# ----------------- BACKGROUND & OBJECTS -----------------
+
+def draw_cactus(x, y):
+    pen = make_pen()
+    pen.color("green")
+
+    # main trunk
+    pen.goto(x, y)
+    pen.pendown()
+    pen.begin_fill()
+    for _ in range(2):
+        pen.forward(25)
+        pen.left(90)
+        pen.forward(80)
+        pen.left(90)
+    pen.end_fill()
+    pen.penup()
+
+    # left arm
+    pen.goto(x - 15, y + 40)
+    pen.pendown()
+    pen.begin_fill()
+    for _ in range(2):
+        pen.forward(15)
+        pen.left(90)
+        pen.forward(35)
+        pen.left(90)
+    pen.end_fill()
+    pen.penup()
+
+    # right arm
+    pen.goto(x + 25, y + 55)
+    pen.pendown()
+    pen.begin_fill()
+    for _ in range(2):
+        pen.forward(15)
+        pen.left(90)
+        pen.forward(35)
+        pen.left(90)
+    pen.end_fill()
+    pen.penup()
+
+
+def draw_underwater_background():
+    """Background: sky + sand + sun + cacti."""
+
+    pen = make_pen()
+
+    # sky
+    pen.goto(-450, 150)
+    pen.color("#4f81c7")  # deep blue
+    pen.begin_fill()
+    pen.pendown()
+    for _ in range(2):
+        pen.forward(900)
+        pen.right(90)
+        pen.forward(500)
+        pen.right(90)
+    pen.end_fill()
+    pen.penup()
+
+    # extra sky band (just to match original style)
+    pen.goto(-450, -50)
+    pen.color("#4f81c7")
+    pen.begin_fill()
+    pen.pendown()
+    for _ in range(2):
+        pen.forward(900)
+        pen.right(90)
+        pen.forward(200)
+        pen.right(90)
+    pen.end_fill()
+    pen.penup()
+
+    # sand
+    pen.goto(-450, -200)
+    pen.color("burlywood")
+    pen.begin_fill()
+    pen.pendown()
+    for _ in range(2):
+        pen.forward(900)
+        pen.right(90)
+        pen.forward(250)
+        pen.right(90)
+    pen.end_fill()
+    pen.penup()
+
+    # sun as half-circle dipping downwards
+    radius = 80
+    pen.color("#ffe066")
+    pen.goto(-radius, -200)
+    pen.setheading(0)
+    pen.begin_fill()
+    pen.pendown()
+    pen.circle(radius, -180)  # downward half
+    pen.goto(-radius, -200)
+    pen.end_fill()
+    pen.penup()
+
+    # cactuses
+    draw_cactus(-400, -200)   # left cactus
+    draw_cactus(350, -200)    # right cactus
+
+
+def draw_die(x, y, size, value):
+    pen = make_pen()
+
+    pen.goto(x, y)
+    pen.color("black", "white")
+    pen.begin_fill()
+    pen.pendown()
+    for _ in range(4):
+        pen.forward(size)
+        pen.right(90)
+    pen.end_fill()
+    pen.penup()
+
+    # pips
+    cx = x + size / 2
+    cy = y - size / 2
+    offset = size / 3
+    r = size * 0.10
+
+    pip_positions = {
+        1: [(cx, cy)],
+        2: [(cx - offset, cy + offset), (cx + offset, cy - offset)],
+        3: [(cx - offset, cy + offset), (cx, cy), (cx + offset, cy - offset)],
+        4: [
+            (cx - offset, cy + offset),
+            (cx + offset, cy + offset),
+            (cx - offset, cy - offset),
+            (cx + offset, cy - offset)
+        ],
+        5: [
+            (cx - offset, cy + offset),
+            (cx + offset, cy + offset),
+            (cx, cy),
+            (cx - offset, cy - offset),
+            (cx + offset, cy - offset)
+        ],
+        6: [
+            (cx - offset, cy + offset),
+            (cx + offset, cy + offset),
+            (cx - offset, cy),
+            (cx + offset, cy),
+            (cx - offset, cy - offset),
+            (cx + offset, cy - offset)
+        ],
+    }
+
+    for px, py in pip_positions[value]:
+        pen.goto(px, py - r)
+        pen.color("black")
+        pen.begin_fill()
+        pen.pendown()
+        pen.circle(r)
+        pen.end_fill()
+        pen.penup()
+
+
+# ----------------- BUTTONS -----------------
+
+def add_button(x, y, width, height, text, callback):
+    """Store button info for click detection and drawing."""
+    buttons.append({
+        "x": x,
+        "y": y,
+        "w": width,
+        "h": height,
+        "text": text,
+        "callback": callback
+    })
+
+
+def draw_buttons():
+    """Draw all buttons from the buttons list."""
+    pen = make_pen()
+    for b in buttons:
+        x, y, w, h, text = b["x"], b["y"], b["w"], b["h"], b["text"]
+
+        # rectangle
+        pen.goto(x - w / 2, y - h / 2)
+        pen.color("white", "darkblue")
+        pen.setheading(0)
+        pen.pendown()
+        pen.begin_fill()
+        for _ in range(2):
+            pen.forward(w)
+            pen.left(90)
+            pen.forward(h)
+            pen.left(90)
+        pen.end_fill()
+        pen.penup()
+
+        # text
+        pen.goto(x, y - 5)
+        pen.color("white")
+        pen.write(text, align="center", font=("Arial", 16, "bold"))
+
+
+# ----------------- SCORING / GAME LOGIC -----------------
+
+def compute_scores():
+    """Fill player_data[name]['score'] based on their roll string."""
+    special_roll = {
+        "456": 268,
+        "111": 267,
+        "222": 266,
+        "333": 265,
+        "444": 264,
+        "555": 263,
+        "666": 262,
+        "123": 261
+    }
+
+    score_roll = {
+        "1": 100,
+        "2": 2,
+        "3": 3,
+        "4": 4,
+        "5": 5,
+        "6": 60
+    }
+
+    for data in player_data.values():
+        roll = data["roll"]
+        data["score"] = 0
+
+        # check for special roll
+        for key, value in special_roll.items():
+            if sorted(roll) == sorted(key):
+                data["score"] = value
+                break
+
+        # otherwise normal scoring
+        if data["score"] == 0:
+            temp_score = 0
+            for char in roll:
+                temp_score += score_roll[char]
+            data["score"] = temp_score
+
+
+def roll_to_chips(roll):
+    sorted_roll = "".join(sorted(roll))
+
+    if sorted_roll == "456":
+        return 4
+    elif sorted_roll in ("111", "222", "333", "444", "555", "666"):
+        return 3
+    elif sorted_roll == "123":
+        return 2
+    else:
+        return 1
+
+
+def update_chips_gui():
+    """
+    Apply chip changes based on scores.
+    Returns a summary dict for displaying on round summary screen.
+    """
+    first = True
+    max_score = None
+    min_score = None
+
+    for name, data in player_data.items():
+        score = data["score"]
+        if first:
+            max_score = score
+            min_score = score
+            first = False
+        else:
+            if score > max_score:
+                max_score = score
+            if score < min_score:
+                min_score = score
+
+    winners = []
+    losers = []
+    for name, data in player_data.items():
+        if data["score"] == max_score:
+            winners.append(name)
+        if data["score"] == min_score:
+            losers.append(name)
+
+    # tie for lowest: no exchange
+    if len(losers) > 1:
+        return {
+            "tie_for_lowest": True,
+            "winners": winners,
+            "losers": losers,
+            "winner_roll": None,
+            "chips_gained": 0
+        }
+
+    winner_name = winners[0]
+    loser_name = losers[0]
+    winner_roll = player_data[winner_name]["roll"]
+    chips_gained = roll_to_chips(winner_roll)
+
+    # loser receives chips from everyone else (as in original logic)
+    for name, data in player_data.items():
+        if name == loser_name:
+            continue
+
+        chips_paid = chips_gained
+        if data["chips"] < chips_paid:
+            chips_paid = data["chips"]
+
+        data["chips"] -= chips_paid
+        player_data[loser_name]["chips"] += chips_paid
+
+    return {
+        "tie_for_lowest": False,
+        "winners": winners,
+        "losers": [loser_name],
+        "winner_roll": winner_roll,
+        "chips_gained": chips_gained
+    }
+
+
+def any_player_zero_chips():
+    """Return True if any player has 0 or fewer chips."""
+    for data in player_data.values():
+        if data["chips"] <= 0:
+            return True
+    return False
+
+
+def get_top_chip_winners():
+    """Return list of winners (names) with max chips at game end."""
+    first = True
+    max_chips = None
+    for name, data in player_data.items():
+        if first:
+            max_chips = data["chips"]
+            first = False
+        else:
+            if data["chips"] > max_chips:
+                max_chips = data["chips"]
+
+    winners = [name for name, data in player_data.items()
+               if data["chips"] == max_chips]
+    return winners
+
+
+# ----------------- GUI GAME FLOW -----------------
+
+def setup_screen():
+    """Screen where players are added before the game starts."""
+    global game_phase
+    game_phase = "setup"
+
+    reset_screen()
+    draw_underwater_background()
+
+    title_pen = make_pen()
+    title_pen.color("darkblue")
+    title_pen.goto(0, 230)
+    title_pen.write("Zanzibar - Player Setup",
+                    align="center", font=("Arial", 32, "bold"))
+
+    info_pen = make_pen()
+    info_pen.color("black")
+    info_pen.goto(0, 190)
+    info_pen.write("Add at least 2 players, then click Begin Game.",
+                   align="center", font=("Arial", 16, "normal"))
+
+    # List players + chips
+    y_start = 140
+    line_gap = 24
+    list_pen = make_pen()
+    list_pen.color("black")
+    if not players:
+        list_pen.goto(0, y_start)
+        list_pen.write("No players yet.",
+                       align="center", font=("Arial", 16, "normal"))
+    else:
+        for i, name in enumerate(players):
+            y = y_start - i * line_gap
+            list_pen.goto(0, y)
+            chips = player_data[name]["chips"]
+            list_pen.write(f"{name}  -  {chips} chips",
+                           align="center", font=("Arial", 16, "normal"))
+
+    # Buttons
+    add_button(-150, -50, 200, 50, "Add Player", add_player_gui)
+    add_button(150, -50, 200, 50, "Begin Game", begin_game_gui)
+    add_button(0, -200, 180, 45, "Back to Menu", main_menu)
+    draw_buttons()
+
+
+def add_player_gui():
+    """Ask for a player name via GUI pop-up and add to roster."""
+    name = screen.textinput("Add Player", "Enter player name:")
+    if not name:
+        return
+    name = name.strip()
+    if name == "":
+        return
+    if name in players:
+        # name already used; maybe show a small warning
+        warn_pen = make_pen()
+        warn_pen.color("red")
+        warn_pen.goto(0, -120)
+        warn_pen.write("Name already used. Choose a different name.",
+                       align="center", font=("Arial", 14, "normal"))
+        return
+
+    players.append(name)
+    player_data[name] = {
+        "roll": "",
+        "score": 0,
+        "chips": 20
+    }
+
+    setup_screen()
+
+
+def begin_game_gui():
+    """Start the game only if at least 2 players exist."""
+    global round_num
+    if len(players) < 2:
+        warn_pen = make_pen()
+        warn_pen.color("red")
+        warn_pen.goto(0, -120)
+        warn_pen.write("You need at least TWO players to begin.",
+                       align="center", font=("Arial", 14, "bold"))
+        return
+
+    round_num = 1
+    start_round()
+
+
+def start_round():
+    """Initialize a new round and start the first player's turn."""
+    global current_player_index, roll_number, current_dice, game_phase
+    game_phase = "turn"
+    current_player_index = 0
+    roll_number = 0
+    current_dice = None
+
+    # reset round-specific roll/score
+    for name in players:
+        player_data[name]["roll"] = ""
+        player_data[name]["score"] = 0
+
+    start_player_turn()
+
+
+def start_player_turn():
+    """Reset roll state for the current player and draw their turn screen."""
+    global roll_number, current_dice
+    roll_number = 0
+    current_dice = None
+    show_player_turn_screen()
+
+
+def show_player_turn_screen():
+    """Draw the screen for the current player's turn."""
+    reset_screen()
+    draw_underwater_background()
+
+    name = players[current_player_index]
+
+    title_pen = make_pen()
+    title_pen.color("darkblue")
+    title_pen.goto(0, 230)
+    title_pen.write(f"Round {round_num} - {name}'s Turn",
+                    align="center", font=("Arial", 28, "bold"))
+
+    info_pen = make_pen()
+    info_pen.color("black")
+    info_pen.goto(0, 190)
+    if roll_number == 0:
+        info_pen.write("Click ROLL to roll 3 dice.",
+                       align="center", font=("Arial", 16, "normal"))
+    else:
+        info_pen.write(f"Roll #{roll_number} (max 3). Reroll dice or finish.",
+                       align="center", font=("Arial", 16, "normal"))
+
+    # show dice if we have them
+    if current_dice is not None:
+        d1, d2, d3 = current_dice
+        size = 70
+        y = 60
+        draw_die(-size - 10, y, size, d1)
+        draw_die(0, y, size, d2)
+        draw_die(size + 10, y, size, d3)
+
+    # Buttons
+    if roll_number == 0:
+        # only allow first roll
+        add_button(0, -20, 200, 50, "Roll", roll_button)
+    else:
+        # allow rerolls if roll_number < 3
+        if roll_number < 3:
+            add_button(-200, -20, 120, 45, "Re-roll 1", reroll_1)
+            add_button(0, -20, 120, 45, "Re-roll 2", reroll_2)
+            add_button(200, -20, 120, 45, "Re-roll 3", reroll_3)
+        # finish turn
+        add_button(0, -90, 200, 50, "Finish Turn", finish_turn)
+
+    add_button(0, -220, 180, 45, "Back to Menu", main_menu)
+    draw_buttons()
+
+
+def roll_button():
+    """First roll for the current player."""
+    global current_dice, roll_number
+    if roll_number > 0:
+        return  # already rolled; ignore
+
+    d1 = random.randint(1, 6)
+    d2 = random.randint(1, 6)
+    d3 = random.randint(1, 6)
+    current_dice = (d1, d2, d3)
+    roll_number = 1
+
+    name = players[current_player_index]
+    player_data[name]["roll"] = f"{d1}{d2}{d3}"
+
+    show_player_turn_screen()
+
+
+def reroll_die(index):
+    """Generic helper to reroll a specific die (0, 1, or 2)."""
+    global current_dice, roll_number
+    if current_dice is None:
+        return
+    if roll_number >= 3:
+        return
+
+    dice_list = list(current_dice)
+    dice_list[index] = random.randint(1, 6)
+    current_dice = tuple(dice_list)
+
+    roll_number += 1
+    name = players[current_player_index]
+    d1, d2, d3 = current_dice
+    player_data[name]["roll"] = f"{d1}{d2}{d3}"
+
+    show_player_turn_screen()
+
+
+def reroll_1():
+    reroll_die(0)
+
+
+def reroll_2():
+    reroll_die(1)
+
+
+def reroll_3():
+    reroll_die(2)
+
+
+def finish_turn():
+    """Finish current player's turn and move to next or end round."""
+    global current_player_index
+
+    if current_dice is None:
+        # player never rolled; auto-force one roll
+        roll_button()
+        # then continue to end turn anyway
+
+    if current_player_index < len(players) - 1:
+        current_player_index += 1
+        start_player_turn()
+    else:
+        finish_round()
+
+
+def finish_round():
+    """Compute scores, update chips, and show round summary or game over."""
+    global game_phase
+    compute_scores()
+    summary = update_chips_gui()
+
+    if any_player_zero_chips():
+        game_phase = "game_over"
+        show_game_over_screen(summary)
+    else:
+        game_phase = "between_rounds"
+        show_round_summary_screen(summary)
+
+
+def show_round_summary_screen(summary):
+    """Show info about winners/losers and chip changes after a round."""
+    reset_screen()
+    draw_underwater_background()
+
+    title_pen = make_pen()
+    title_pen.color("darkblue")
+    title_pen.goto(0, 230)
+    title_pen.write(f"Round {round_num} Summary",
+                    align="center", font=("Arial", 30, "bold"))
+
+    text_pen = make_pen()
+    text_pen.color("black")
+    text_pen.goto(0, 180)
+
+    if summary["tie_for_lowest"]:
+        text_pen.write("Tie for lowest score.\nNo chips were exchanged this round.",
+                       align="center", font=("Arial", 16, "normal"))
+    else:
+        winners = ", ".join(summary["winners"])
+        loser = summary["losers"][0]
+        chips_gained = summary["chips_gained"]
+        winner_roll = summary["winner_roll"]
+
+        msg = (f"Highest roll: {winners} ({winner_roll})\n"
+               f"Lowest score: {loser}\n"
+               f"{loser} received {chips_gained} chip(s) from each other player.")
+        text_pen.write(msg, align="center", font=("Arial", 16, "normal"))
+
+    # show chip counts
+    list_pen = make_pen()
+    list_pen.color("black")
+    y_start = 110
+    gap = 24
+    for i, name in enumerate(players):
+        y = y_start - i * gap
+        list_pen.goto(0, y)
+        chips = player_data[name]["chips"]
+        list_pen.write(f"{name}: {chips} chips",
+                       align="center", font=("Arial", 16, "normal"))
+
+    # buttons
+    add_button(-130, -200, 200, 50, "Next Round", next_round_button)
+    add_button(150, -200, 200, 50, "Back to Menu", main_menu)
+    draw_buttons()
+
+
+def next_round_button():
+    """Start the next round."""
+    global round_num
+    round_num += 1
+    start_round()
+
+
+def show_game_over_screen(summary):
+    """Display final results when someone hits 0 chips."""
+    reset_screen()
+    draw_underwater_background()
+
+    title_pen = make_pen()
+    title_pen.color("darkblue")
+    title_pen.goto(0, 230)
+    title_pen.write("GAME OVER",
+                    align="center", font=("Arial", 32, "bold"))
+
+    winners = get_top_chip_winners()
+    winner_text = ", ".join(winners)
+
+    win_pen = make_pen()
+    win_pen.color("black")
+    win_pen.goto(0, 180)
+    win_pen.write(f"Winner(s): {winner_text}",
+                  align="center", font=("Arial", 18, "bold"))
+
+    # chip counts
+    list_pen = make_pen()
+    list_pen.color("black")
+    y_start = 120
+    gap = 24
+    for i, name in enumerate(players):
+        y = y_start - i * gap
+        list_pen.goto(0, y)
+        chips = player_data[name]["chips"]
+        list_pen.write(f"{name}: {chips} chips",
+                       align="center", font=("Arial", 16, "normal"))
+
+    add_button(0, -200, 200, 50, "Back to Menu", main_menu)
+    draw_buttons()
+
+
+# ----------------- BASIC INFO SCREENS -----------------
+
+def rules_screen():
+    reset_screen()
+    draw_underwater_background()
+
+    title_pen = make_pen()
+    title_pen.color("darkblue")
+    title_pen.goto(0, 230)
+    title_pen.write("HOW TO PLAY", align="center", font=("Arial", 32, "bold"))
+
+    text_pen = make_pen()
+    text_pen.color("black")
+    text_pen.goto(0, 130)
+    text_pen.write(
+        "Each player starts with 20 chips.\n"
+        "On your turn, roll 3 dice (up to 3 rolls total).\n"
+        "You may re-roll individual dice up to 2 times.\n"
+        "Special combos and higher scores matter.\n"
+        "After everyone rolls, chips are exchanged.",
+        align="center", font=("Arial", 16, "normal")
+    )
+
+    add_button(0, -220, 180, 45, "Back to Menu", main_menu)
+    draw_buttons()
+
+
+def scoring_screen():
+    reset_screen()
+    draw_underwater_background()
+
+    title_pen = make_pen()
+    title_pen.color("darkblue")
+    title_pen.goto(0, 230)
+    title_pen.write("SCORING", align="center", font=("Arial", 32, "bold"))
+
+    text_pen = make_pen()
+    text_pen.color("black")
+    text_pen.goto(0, 140)
+    text_pen.write(
+        "Special rolls (sorted):\n"
+        " 456  → very high\n"
+        " 111–666 → triple values (111 highest among them)\n"
+        " 123  → low special\n\n"
+        "Otherwise, dice are scored individually:\n"
+        " 1 → 100 points\n"
+        " 6 → 60 points\n"
+        " 2,3,4,5 → face value",
+        align="center", font=("Arial", 16, "normal")
+    )
+
+    add_button(0, -220, 180, 45, "Back to Menu", main_menu)
+    draw_buttons()
+
+
+# ----------------- BUTTON CALLBACKS: MENU -----------------
+
+def start_game_setup():
+    """Go to the setup screen to add players and begin the GUI game."""
+    setup_screen()
+
+
+def show_rules():
+    rules_screen()
+
+
+def show_scoring():
+    scoring_screen()
+
+
+# ----------------- MAIN MENU -----------------
+
+def main_menu():
+    global game_phase, players, player_data, round_num
+    game_phase = "menu"
+
+    reset_screen()
+    draw_underwater_background()
+
+    # Title
+    title_pen = make_pen()
+    title_pen.color("darkblue")
+    title_pen.goto(0, 230)
+    title_pen.write("ZANZIBAR", align="center", font=("Arial", 40, "bold"))
+
+    # Small dice decoration
+    draw_die(-200, 200, 40, 4)   # left
+    draw_die(160, 210, 40, 6)    # right
+    draw_die(-30, 160, 40, 5)    # centered below
+
+    # Buttons
+    add_button(0, 60, 220, 50, "Start Game", start_game_setup)
+    add_button(0, 0, 220, 50, "How to Play", show_rules)
+    add_button(0, -60, 220, 50, "Scoring", show_scoring)
+
+    draw_buttons()
+
+
+# ----------------- RUN -----------------
+
+def main():
+    screen.onclick(on_click)
+    main_menu()
+    turtle.done()
+
+
+if __name__ == "__main__":
+    main()
