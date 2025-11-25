@@ -1,9 +1,5 @@
-#CODE WORK PLZ
-
 import turtle
 
-
-#screen part
 
 screen = turtle.Screen()
 screen.title("Zanzibar")
@@ -21,18 +17,19 @@ def make_pen():
     t.speed(0)
     return t
 
-# small helper to reset between screens
+
 def reset_screen():
     global buttons
     screen.clear()
     screen.title("Zanzibar")
     screen.setup(width=900, height=700)
-    screen.bgcolor("lightblue")
+    screen.bgcolor('#4f81c7')
     buttons = []
     screen.onclick(on_click)
 
 
-#cactus
+# ---------- cactus ----------
+
 def draw_cactus(x, y):
     pen = make_pen()
     pen.color("green")
@@ -75,10 +72,37 @@ def draw_cactus(x, y):
 
 
 def draw_underwater_background():
-    """Sand cuz ocean idk"""
+    """background"""
+
     pen = make_pen()
 
-    # sandpart
+    #  sky
+    pen.goto(-450, 150)
+    pen.color("#4f81c7")  # deep blue
+    pen.begin_fill()
+    pen.pendown()
+    for _ in range(2):
+        pen.forward(900)
+        pen.right(90)
+        pen.forward(500)
+        pen.right(90)
+    pen.end_fill()
+    pen.penup()
+
+    # sky
+    pen.goto(-450, -50)
+    pen.color("#4f81c7")
+    pen.begin_fill()
+    pen.pendown()
+    for _ in range(2):
+        pen.forward(900)
+        pen.right(90)
+        pen.forward(200)
+        pen.right(90)
+    pen.end_fill()
+    pen.penup()
+
+    # sand
     pen.goto(-450, -200)
     pen.color("burlywood")
     pen.begin_fill()
@@ -91,14 +115,29 @@ def draw_underwater_background():
     pen.end_fill()
     pen.penup()
 
-#cactus
+   #sunnnnn
+    radius = 80
+    pen.color("#ffe066")
+
+    pen.goto(-radius, -200)
+
+    pen.setheading(0)
+
+    pen.begin_fill()
+    pen.pendown()
+    pen.circle(radius, -360)  # negative = draw arc downward
+    pen.goto(-radius, -200)  # close the shape
+    pen.end_fill()
+    pen.penup()
+
+    # cactuses
     draw_cactus(-400, -200)   # left cactus
     draw_cactus(350, -200)    # right cactus
 
 
 # Dice
-def draw_die(x, y, size, value):
 
+def draw_die(x, y, size, value):
     pen = make_pen()
 
     pen.goto(x, y)
@@ -111,12 +150,12 @@ def draw_die(x, y, size, value):
     pen.end_fill()
     pen.penup()
 
-    #inside cirlce spots
-    cx = x + size/2
-    cy = y - size/2
-    offset = size/3
+    # pips
+    cx = x + size / 2
+    cy = y - size / 2
+    offset = size / 3
     r = size * 0.10
-#radius
+
     pip_positions = {
         1: [(cx, cy)],
         2: [(cx - offset, cy + offset), (cx + offset, cy - offset)],
@@ -154,11 +193,10 @@ def draw_die(x, y, size, value):
         pen.penup()
 
 
-#BUTTONSSS ill do more later
+# ---------- Buttons ----------
+
 def add_button(x, y, width, height, text, callback):
-    """
-    buto info
-    """
+    """buto info"""
     buttons.append({
         "x": x,
         "y": y,
@@ -176,7 +214,7 @@ def draw_buttons():
         x, y, w, h, text = b["x"], b["y"], b["w"], b["h"], b["text"]
 
         # rectangle
-        pen.goto(x - w/2, y - h/2)
+        pen.goto(x - w / 2, y - h / 2)
         pen.color("white", "darkblue")
         pen.setheading(0)
         pen.pendown()
@@ -189,8 +227,8 @@ def draw_buttons():
         pen.end_fill()
         pen.penup()
 
-        #  text
-        pen.goto(x, y - 8)
+        # text
+        pen.goto(x, y - 5)
         pen.color("white")
         pen.write(text, align="center", font=("Arial", 16, "bold"))
 
@@ -198,17 +236,17 @@ def draw_buttons():
 def on_click(x, y):
     """Check if a mouse click was inside any button."""
     for b in buttons:
-        left = b["x"] - b["w"]/2
-        right = b["x"] + b["w"]/2
-        bottom = b["y"] - b["h"]/2
-        top = b["y"] + b["h"]/2
+        left = b["x"] - b["w"] / 2
+        right = b["x"] + b["w"] / 2
+        bottom = b["y"] - b["h"] / 2
+        top = b["y"] + b["h"] / 2
 
         if left <= x <= right and bottom <= y <= top:
             b["callback"]()
             break
 
 
-# screen
+# ---------- SCREENS ----------
 
 def start_screen():
     reset_screen()
@@ -222,7 +260,7 @@ def start_screen():
     info_pen = make_pen()
     info_pen.color("black")
     info_pen.goto(0, 170)
-    info_pen.write("This is where your game / player select goes.",
+    info_pen.write("Ruru Remon Game Go here",
                    align="center", font=("Arial", 14, "normal"))
 
     add_button(0, -230, 180, 45, "Back to Menu", main_menu)
@@ -262,20 +300,21 @@ def scoring_screen():
     title_pen.goto(0, 230)
     title_pen.write("SCORING", align="center", font=("Arial", 32, "bold"))
 
+    # Scoring screen center
     text_pen = make_pen()
     text_pen.color("black")
-    text_pen.goto(-380, 180)
+    text_pen.goto(0, 110)
     text_pen.write(
-        "scores n shi:\n"
+        "Scores n shi:\n"
         "Rules",
-        align="center", font=("Arial", 14, "normal")
+        align="center", font=("Arial", 18, "normal")
     )
 
     add_button(0, -230, 180, 45, "Back to Menu", main_menu)
     draw_buttons()
 
 
-# Buttons practice (now they switch screens)
+# Buttons
 
 def start_game():
     start_screen()
@@ -289,9 +328,11 @@ def show_scoring():
     scoring_screen()
 
 
-#  MAIN MENU
+# ---------- MAIN MENU ----------
+
 def main_menu():
     reset_screen()
+
     # Draw background
     draw_underwater_background()
 
@@ -301,7 +342,7 @@ def main_menu():
     title_pen.goto(0, 230)
     title_pen.write("ZANZIBAR", align="center", font=("Arial", 40, "bold"))
 
-    # Small non-moving dice around the title
+    # Small dice
     draw_die(-200, 200, 40, 4)   # left
     draw_die(160, 210, 40, 6)    # right
     draw_die(-30, 160, 40, 5)    # centered below
@@ -314,7 +355,8 @@ def main_menu():
     draw_buttons()
 
 
-# Run
+# ---------- RUN ----------
+
 def main():
     screen.onclick(on_click)
     main_menu()
@@ -323,4 +365,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
